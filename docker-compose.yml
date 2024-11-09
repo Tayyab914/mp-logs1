@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  product:
+    build: ./services/product
+    ports:
+      - "5001:5001"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce
+    depends_on:
+      - mongodb
+    networks:
+      - ecommerce
+    restart: on-failure
+
+  order:
+    build: ./services/order
+    ports:
+      - "5002:5002"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce
+    depends_on:
+      - mongodb
+    networks:
+      - ecommerce
+    restart: on-failure
+
+  cart:
+    build: ./services/cart
+    ports:
+      - "5003:5003"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce
+    depends_on:
+      - mongodb
+    networks:
+      - ecommerce
+    restart: on-failure
+
+  auth:
+    build: ./services/auth
+    ports:
+      - "5004:5004"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce
+    depends_on:
+      - mongodb
+    networks:
+      - ecommerce
+    restart: on-failure
+
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    networks:
+      - ecommerce
+
+networks:
+  ecommerce:
+    driver: bridge

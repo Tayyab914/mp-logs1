@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced E-commerce Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+    <style>
+        /* Toaster Notification Styling */
+        .toaster {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            background-color: #10B981;
+            color: white;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            transform: translateY(20px);
+        }
+        .toaster.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toaster-icon {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body class="bg-green-50 text-gray-800 font-sans">
+    <!-- Header -->
+    <header class="bg-green-600 text-white py-4 mb-4">
+        <div class="container mx-auto text-center">
+            <h1 class="text-3xl font-bold">Enhanced E-commerce Platform</h1>
+            <p>Manage products, cart, orders, and search with ease.</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4">
+        <div id="app"></div>
+    </main>
+
+    <!-- Toaster Notification -->
+    <div id="toaster" class="toaster">
+        <span id="toastIcon" class="toaster-icon"></span>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        let authToken = '';
+        let cart = [];
+
+        // Show toast notification
+        function showToast(message, success = true) {
+            const toaster = document.getElementById('toaster');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toaster.style.backgroundColor = success ? '#10B981' : '#EF4444';
+            toaster.classList.add('show');
+            setTimeout(() => { toaster.classList.remove('show'); }, 3000);
+        }
+
+        // Render login view
+        function renderLogin() {
+            document.getElementById('app').innerHTML = `
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Login</h2>
+                    <div class="flex gap-4 mb-2">
+                        <input type="text" id="username" placeholder="Username" class="border border-gray-300 rounded p-2 w-full">
+                        <input type="password" id="password" placeholder="Password" class="border border-gray-300 rounded p-2 w-full">
+                    </div>
+                    <button onclick="login()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">Login</button>
+                </section>
+            `;
+        }
+
+        // Render dashboard with product management, cart, and order history
+        function renderDashboard() {
+            document.getElementById('app').innerHTML = `
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Add New Product</h2>
+                    <div class="flex gap-4 mb-2">
+                        <input type="text" id="newProductName" placeholder="Product Name" class="border border-gray-300 rounded p-2 w-full">
+                        <input type="text" id="newProductDescription" placeholder="Product Description" class="border border-gray-300 rounded p-2 w-full">
+                        <input type="number" id="newProductPrice" placeholder="Product Price" class="border border-gray-300 rounded p-2 w-full">
+                        <input type="number" id="newProductStock" placeholder="Product Stock" class="border border-gray-300 rounded p-2 w-full">
+                    </div>
+                    <button onclick="addProduct()" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">Add Product</button>
+                </section>
+
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Search Products</h2>
+                    <input type="text" id="searchInput" placeholder="Search by product name..." class="border border-gray-300 rounded p-2 w-full mb-2">
+                    <button onclick="searchProducts()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">Search</button>
+                </section>
+
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Products</h2>
+                    <div id="productList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                </section>
+
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Your Cart</h2>
+                    <div id="cartItems" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${cart.length > 0 ? cart.map(item => `
+                            <div class="p-4 bg-white rounded shadow-md">
+                                <h3 class="text-lg font-bold">${item.name}</h3>
+                                <p>Quantity: ${item.quantity}</p>
+                                <button onclick="purchaseItem('${item.productId}', ${item.quantity})" class="bg-purple-500 text-white px-3 py-2 rounded w-full">Buy Now</button>
+                                <button onclick="removeFromCart('${item.productId}')" class="bg-red-500 text-white px-3 py-2 mt-2 rounded w-full">Remove</button>
+                            </div>
+                        `).join('') : '<p>Your cart is empty.</p>'}
+                    </div>
+                </section>
+
+                <section class="mb-6">
+                    <h2 class="text-2xl font-semibold text-green-700 mb-4">Order History</h2>
+                    <div id="orderList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                    <button onclick="getOrders()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mt-4">Refresh Orders</button>
+                </section>
+            `;
+            getProducts();
+            getOrders();
+        }
+
+        // Fetch and display products
+        async function getProducts() {
+            try {
+                const response = await fetch('http://localhost:5001/products');
+                const products = await response.json();
+                displayProducts(products);
+            } catch {
+                showToast('Error: Could not retrieve products', false);
+            }
+        }
+
+        // Display products
+        function displayProducts(products) {
+            const productList = document.getElementById('productList');
+            productList.innerHTML = products.map(p => `
+                <div class="p-4 bg-white rounded shadow-md">
+                    <h3 class="text-lg font-bold">${p.name}</h3>
+                    <p>${p.description}</p>
+                    <p class="text-green-600 font-semibold">$${p.price}</p>
+                    <input type="number" id="quantity-${p._id}" placeholder="Quantity" class="border border-gray-300 rounded p-1 w-full mb-2">
+                    <button onclick="addToCart('${p._id}', '${p.name}', document.getElementById('quantity-${p._id}').value)" class="bg-blue-500 text-white py-2 px-4 rounded w-full">Add to Cart</button>
+                </div>
+            `).join('');
+        }
+
+        // Search products by name
+        async function searchProducts() {
+            const query = document.getElementById('searchInput').value;
+            try {
+                const response = await fetch(`http://localhost:5001/products?search=${query}`);
+                const products = await response.json();
+                displayProducts(products);
+            } catch {
+                showToast('Error: Could not search products', false);
+            }
+        }
+
+        // Fetch and display orders
+        async function getOrders() {
+            try {
+                const response = await fetch('http://localhost:5002/orders', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const orders = await response.json();
+                const orderList = document.getElementById('orderList');
+                orderList.innerHTML = orders.map(order => `
+                    <div class="p-4 bg-white rounded shadow-md">
+                        <h3 class="text-lg font-bold">Order ID: ${order._id}</h3>
+                        <p>${order.items.map(item => `${item.quantity} x ${item.productId}`).join(', ')}</p>
+                    </div>
+                `).join('');
+            } catch {
+                showToast('Error: Could not retrieve orders', false);
+            }
+        }
+
+        // Login function
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:5004/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (data.token) {
+                    authToken = data.token;
+                    showToast('Login successful');
+                    renderDashboard();
+                } else {
+                    showToast('Login failed', false);
+                }
+            } catch {
+                showToast('Error: Login failed', false);
+            }
+        }
+
+        // Add new product
+        async function addProduct() {
+            const name = document.getElementById('newProductName').value;
+            const description = document.getElementById('newProductDescription').value;
+            const price = parseFloat(document.getElementById('newProductPrice').value);
+            const stock = parseInt(document.getElementById('newProductStock').value);
+
+            try {
+                await fetch('http://localhost:5001/product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ name, description, price, stock })
+                });
+                showToast('Product added successfully');
+                getProducts(); // Refresh product list
+            } catch {
+                showToast('Error: Could not add product', false);
+            }
+        }
+
+        // Add product to cart
+        function addToCart(productId, name, quantity) {
+            quantity = parseInt(quantity);
+            if (isNaN(quantity) || quantity < 1) {
+                showToast('Invalid quantity', false);
+                return;
+            }
+            const existingItem = cart.find(item => item.productId === productId);
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cart.push({ productId, name, quantity });
+            }
+            showToast('Item added to cart');
+            renderDashboard(); // Refresh dashboard to show updated cart
+        }
+
+        // Remove item from cart
+        function removeFromCart(productId) {
+            cart = cart.filter(item => item.productId !== productId);
+            showToast('Item removed from cart');
+            renderDashboard(); // Refresh dashboard to show updated cart
+        }
+
+        // Purchase item directly from cart
+        async function purchaseItem(productId, quantity) {
+            try {
+                const response = await fetch('http://localhost:5002/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ items: [{ productId, quantity }] })
+                });
+
+                if (response.ok) {
+                    showToast('Item purchased successfully');
+                    cart = cart.filter(item => item.productId !== productId);
+                    renderDashboard();
+                } else {
+                    showToast('Error: Could not purchase item', false);
+                }
+            } catch {
+                showToast('Error: Could not purchase item', false);
+            }
+        }
+
+        // Initialize app with login view
+        renderLogin();
+    </script>
+</body>
+</html>
